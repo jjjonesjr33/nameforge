@@ -4,6 +4,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const { pipeline } = require('stream');
 const { promisify } = require('util');
 const pipelineAsync = promisify(pipeline);
@@ -135,7 +136,11 @@ async function downloadOpenSCADUpdate(app, downloadUrl, onProgress) {
     throw new Error('Fichier téléchargé vide — téléchargement incomplet');
   }
 
-  return { installerPath: tmpFile };
+  // CHECKSUM-1: Compute SHA256 — log for manual auditability
+  const sha256 = await computeSHA256(tmpFile);
+  console.log(`[openscadUpdater] SHA256 : ${sha256}`);
+
+  return { installerPath: tmpFile, sha256 };
 }
 
 // MEDIUM-2: 500 MB cap — prevents disk exhaustion from a compromised CDN.
@@ -196,6 +201,17 @@ function followRedirects(url, redirectCount = 0) {
       }
       resolve(res);
     }).on('error', reject);
+  });
+}
+
+// CHECKSUM-1: Stream-based SHA256 — no full file buffered in memory
+function computeSHA256(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('error', reject);
   });
 }
 
