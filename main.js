@@ -53,12 +53,21 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
   }
 
-  // LOW-5: block renderer-initiated navigation (window.open, link clicks, etc.)
+  // LOW-5 + MISC-1: block renderer-initiated navigation — pin to exact allowed URL
+  const allowedFileUrl = isDev
+    ? null
+    : require('url').pathToFileURL(path.join(__dirname, 'dist', 'index.html')).href;
   mainWindow.webContents.on('will-navigate', (event, url) => {
     const allowed = isDev
       ? url.startsWith('http://localhost:5173')
-      : url.startsWith('file://');
+      : url === allowedFileUrl;
     if (!allowed) event.preventDefault();
+  });
+
+  // MISC-2: deny all new-window requests — open https links in system browser instead
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://')) shell.openExternal(url);
+    return { action: 'deny' };
   });
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
@@ -114,6 +123,8 @@ ipcMain.handle('generate-model', async (event, params, format = 'stl', suffix = 
     if (!params || typeof params !== 'object' || Array.isArray(params)) {
       throw new Error('params invalide : objet attendu');
     }
+    // PP-1: strip prototype chain — prevents prototype-polluted props from leaking into generation
+    const safeParams = Object.assign(Object.create(null), params);
     const safeFormat = String(format).toLowerCase();
     if (!ALLOWED_FORMATS.has(safeFormat)) {
       throw new Error(`Format non supporté : ${safeFormat}`);
@@ -136,7 +147,7 @@ ipcMain.handle('generate-model', async (event, params, format = 'stl', suffix = 
     const safeSend = (ch, data) => { if (!event.sender.isDestroyed()) event.sender.send(ch, data); };
     safeSend('generation-progress', { status: 'running', message: 'Génération en cours…' });
 
-    const result = await generateModel(app, scadFile, params, safeFormat, safeSuffix);
+    const result = await generateModel(app, scadFile, safeParams, safeFormat, safeSuffix);
 
     safeSend('generation-progress', { status: 'done', message: 'Terminé' });
     return { success: true, outputPath: result.outputPath };
@@ -329,8 +340,8 @@ app.whenReady().then(() => {
             [
               "default-src 'self'",
               "script-src 'self'",
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "font-src 'self' https://fonts.gstatic.com",
+              "style-src 'self'",
+              "font-src 'self'",
               "img-src 'self' data: blob:",
               "connect-src 'self' https://api.github.com https://github.com https://objects.githubusercontent.com https://releases.openscad.org",
               "frame-src 'none'",
