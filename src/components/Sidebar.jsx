@@ -28,6 +28,7 @@ const FONT_BASE_OPTIONS = [
   { value: 'Bungee:style=Regular',       label: 'Bungee',           rating: 'safe',   hint: 'Chunky display, conçu pour enseignes — top print' },
   { value: 'Oswald:style=Regular',       label: 'Oswald',           rating: 'safe',   hint: 'Condensé sans-serif, naturellement dense et lisible' },
   { value: 'Righteous:style=Regular',    label: 'Righteous',        rating: 'safe',   hint: 'Rétro sport, arrondis épais — strokes réguliers' },
+  { value: 'STIX Two Math:style=Regular', label: 'STIX Two Math',   rating: 'danger', hint: 'Mathématique serif, strokes fins — grande taille requise (≥20mm)' },
 ];
 
 const FONT_CORSIVO_OPTIONS = [
