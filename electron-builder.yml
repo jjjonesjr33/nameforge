@@ -1,0 +1,70 @@
+appId: com.nameforge.app
+productName: NameForge
+copyright: Copyright © 2024 NameForge
+
+directories:
+  buildResources: assets
+  output: release
+
+files:
+  - dist/**/*
+  - main.js
+  - preload.js
+  - package.json
+  # Explicit list — prevents accidental inclusion of future files in src/utils/
+  - src/utils/openscadRunner.js
+  - src/utils/openscadUpdater.js
+  - src/utils/bambu3mf.js
+
+extraResources:
+  - from: resources/openscad
+    to: openscad
+    filter:
+      - "**/*"
+  - from: resources/scad
+    to: scad
+    filter:
+      - "**/*"
+  - from: resources/fonts
+    to: fonts
+    filter:
+      - "**/*"
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+    - target: zip
+      arch:
+        - x64
+  icon: assets/icon.ico
+
+mac:
+  target:
+    - target: dmg
+    - target: zip
+  icon: assets/icon.icns
+  category: public.app-category.productivity
+
+linux:
+  target:
+    - target: AppImage
+    - target: deb
+  icon: assets/icon.png
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+# publish:
+#   provider: github
+#   owner: YOUR_GITHUB_USERNAME   ← remplacer avant de publier
+#   repo: nameforge

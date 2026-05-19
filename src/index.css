@@ -1,0 +1,141 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Couleurs design system (NVIDIA-inspired) ────────────────────────── */
+  --color-primary: #76b900;
+  --color-primary-dark: #5a8d00;
+  --color-canvas: #ffffff;
+  --color-surface-dark: #000000;
+  --color-surface-elevated: #1a1a1a;
+  --color-surface-soft: #f7f7f7;
+  --color-hairline: #cccccc;
+  --color-hairline-strong: #5e5e5e;
+  --color-ink: #000000;
+  --color-body: #1a1a1a;
+  --color-mute: #757575;
+  --color-stone: #898989;
+  --color-ash: #a7a7a7;
+  --color-on-dark: #ffffff;
+  --color-on-dark-mute: rgba(255, 255, 255, 0.7);
+  --color-error: #e52020;
+  --color-app-bg: #0a0a0a;
+  --color-app-panel: #111111;
+  --color-app-card: #1a1a1a;
+  --color-app-border: #2a2a2a;
+  --color-app-border-focus: #76b900;
+
+  /* ── Border radius ───────────────────────────────────────────────────── */
+  --radius-none: 0px;
+  --radius-xs: 1px;
+  --radius-sm: 2px;
+  --radius: 2px;
+  --radius-full: 9999px;
+
+  /* ── Typographie ─────────────────────────────────────────────────────── */
+  --font-sans: 'Inter', Arial, Helvetica, sans-serif;
+
+  /* ── Espacement nommé ────────────────────────────────────────────────── */
+  --spacing-xxs: 2px;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-xxl: 32px;
+  --spacing-section: 64px;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background: #0a0a0a;
+    color: #ffffff;
+    font-family: 'Inter', Arial, Helvetica, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Suppress number input spinners — custom NumberInput uses onBlur/Enter commit */
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  /* Scrollbar — dark chrome */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #111111;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2a2a2a;
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3a3a3a;
+  }
+}
+
+@layer components {
+  /* Primary button — NVIDIA green fill */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2
+      bg-primary text-black font-bold text-[16px] leading-tight
+      px-6 h-11 rounded-sm
+      transition-colors duration-100
+      hover:bg-primary-dark active:bg-primary-dark
+      disabled:bg-[#2a2a2a] disabled:text-ash disabled:cursor-not-allowed;
+  }
+
+  /* Outline button — green border */
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2
+      bg-transparent text-on-dark font-bold text-[16px] leading-tight
+      border border-primary px-6 h-11 rounded-sm
+      transition-colors duration-100
+      hover:bg-primary/10 active:bg-primary/20
+      disabled:border-[#2a2a2a] disabled:text-ash disabled:cursor-not-allowed;
+  }
+
+  /* Ghost button — text only */
+  .btn-ghost {
+    @apply inline-flex items-center gap-1
+      text-primary font-bold text-[16px]
+      hover:underline;
+  }
+
+  /* Form input */
+  .form-input {
+    @apply w-full bg-[#0a0a0a] text-on-dark text-[15px]
+      border border-[#2a2a2a] rounded-sm
+      px-3 h-9
+      outline-none
+      transition-colors duration-100
+      focus:border-primary
+      disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  /* Section label */
+  .section-label {
+    @apply text-[11px] font-bold uppercase tracking-wider text-stone;
+  }
+}
