@@ -45,6 +45,13 @@ win:
       arch:
         - x64
   icon: assets/icon.ico
+  # SIGN-1: Code signing — requires EV certificate (DigiCert/Sectigo ~$300/yr)
+  # To enable: set env vars CSC_LINK (path to .pfx) + CSC_KEY_PASSWORD (pfx password)
+  # electron-builder picks them up automatically when present.
+  # Without cert: Windows SmartScreen warns "Unknown publisher" on first run.
+  signingHashAlgorithms:
+    - sha256
+  # publisherName: "NameForge"  # uncomment when cert acquired
 
 mac:
   target:

@@ -6,9 +6,8 @@
     <!-- CSP géré au niveau Electron main process (session.webRequest) plutôt que meta tag
          car les meta CSP bloquent les modules inline de React Fast Refresh en dev -->
     <!-- <meta http-equiv="Content-Security-Policy" ... /> -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet" />
+    <!-- CSP-1: Google Fonts removed — blocked by strict CSP in prod (style-src 'self').
+         Inter replaced by system UI font stack in index.css. -->
     <title>NameForge</title>
   </head>
   <body>

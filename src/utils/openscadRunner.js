@@ -131,8 +131,16 @@ async function buildFontconfigFile(app) {
 
   if (!fs.existsSync(ourFontsPath)) return null;
 
-  // Convert Windows backslashes → forward slashes for XML/fontconfig
-  const toFC = (p) => p.replace(/\\/g, '/');
+  // Convert Windows backslashes → forward slashes, then escape XML entities.
+  // XML-1: paths may contain & < > (e.g. username "Tom&Jerry") — must be escaped
+  // or the generated fontconfig XML will be malformed / injectable.
+  const escapeXml = (s) => s
+    .replace(/&/g, '&amp;')   // must be first
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+  const toFC = (p) => escapeXml(p.replace(/\\/g, '/'));
 
   const includeBlock = fs.existsSync(bundledConf)
     ? `  <include>${toFC(bundledConf)}</include>\n`

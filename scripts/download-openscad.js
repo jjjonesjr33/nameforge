@@ -8,6 +8,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const { pipeline } = require('stream');
 const { promisify } = require('util');
 const { execSync, execFileSync } = require('child_process');
@@ -81,6 +82,13 @@ async function main() {
 
   fs.mkdirSync(DEST_DIR, { recursive: true });
 
+  // CHECKSUM-1: Compute and log SHA256 of downloaded file.
+  // OpenSCAD releases don't publish signed checksums, so we can't auto-verify,
+  // but logging the hash lets users/auditors confirm integrity manually.
+  const sha256 = await computeSHA256(tmpFile);
+  console.log(`🔑 SHA256 : ${sha256}`);
+  console.log(`   (vérifiez manuellement sur https://openscad.org/downloads.html si disponible)`);
+
   console.log(`📂 Extraction → ${DEST_DIR}`);
   await config.extractFn(tmpFile, DEST_DIR, config.binary);
 
@@ -150,6 +158,19 @@ async function copyAppImage(appImageFile, destDir) {
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
+
+// CHECKSUM-1: Stream-based SHA256 — no full file in memory
+function computeSHA256(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('error', reject);
+  });
+}
+
+
 
 const MAX_API_BYTES = 1 * 1024 * 1024; // 1MB — consistent with openscadUpdater.js
 
