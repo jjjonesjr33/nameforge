@@ -6,6 +6,14 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 // Single module-level loader instance — STLLoader is stateless and safe to reuse
 const stlLoader = new STLLoader();
 
+// PERF-1: Cache Bambu bed texture at module level — single canvas allocation per session.
+// makeBambuTexture() creates a 512×512 canvas + GPU upload; safe to reuse across mounts.
+let _bambuTexture = null;
+function getBambuTexture() {
+  if (!_bambuTexture) _bambuTexture = makeBambuTexture();
+  return _bambuTexture;
+}
+
 // previewData = { baseStlPath, nomeStlPath, baseColor, nomeColor }
 export default function Preview3D({ previewData, loading, onError }) {
   const mountRef = useRef(null);
@@ -182,6 +190,15 @@ async function loadMeshes(s, previewData, genId) {
   disposeMesh(s, 'baseMesh');
   disposeMesh(s, 'nomeMesh');
 
+  // COR-5: Dispose footprint unconditionally at start — prevents stale green shadow
+  // lingering if the new load is aborted (stale check) or succeeds with no base mesh.
+  if (s.footprint) {
+    s.scene.remove(s.footprint);
+    s.footprint.geometry.dispose();
+    s.footprint.material.dispose();
+    s.footprint = null;
+  }
+
   // Supprimer placeholder
   const ph = s.scene.getObjectByName('placeholder');
   if (ph) s.scene.remove(ph);
@@ -238,8 +255,7 @@ async function loadMeshes(s, previewData, genId) {
   }
 
   if (meshes.length === 0) {
-    // No geometry to show — clean footprint and stop auto-rotate
-    if (s.footprint) { s.scene.remove(s.footprint); s.footprint.geometry.dispose(); s.footprint.material.dispose(); s.footprint = null; }
+    // No geometry to show — footprint already disposed at start of this function
     if (s.controls) s.controls.autoRotate = false;
     return;
   }
@@ -276,7 +292,7 @@ async function loadMeshes(s, previewData, genId) {
   }
 
   // ── Footprint shadow (empreinte modèle sur plateau) ──────────────────────
-  if (s.footprint) { s.scene.remove(s.footprint); s.footprint.geometry.dispose(); s.footprint.material.dispose(); s.footprint = null; }
+  // (old footprint already disposed at start of loadMeshes)
   if (s.baseMesh) {
     const wb  = new THREE.Box3().setFromObject(s.baseMesh);
     const fpG = new THREE.PlaneGeometry(wb.max.x - wb.min.x, wb.max.y - wb.min.y);
@@ -300,7 +316,9 @@ function disposeMesh(s, key) {
   if (s[key]) {
     s.scene.remove(s[key]);
     s[key].geometry.dispose();
-    s[key].material.dispose();
+    // COR-4: handle array materials (e.g. if material is swapped to multi-material later)
+    const mats = Array.isArray(s[key].material) ? s[key].material : [s[key].material];
+    mats.forEach((m) => m && m.dispose());
     s[key] = null;
   }
 }
@@ -454,7 +472,7 @@ function createBambuBed(scene) {
   const surfaceMesh = new THREE.Mesh(
     plateGeom,
     new THREE.MeshBasicMaterial({
-      map: makeBambuTexture(),
+      map: getBambuTexture(),
       side: THREE.FrontSide, // top face only — back-face not needed
       // No polygonOffset: bodyMesh front cap is at Z=-0.01 (translate -3.01),
       // giving 0.01 physical gap — enough to prevent z-fighting without offset tricks.

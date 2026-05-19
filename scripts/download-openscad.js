@@ -92,6 +92,20 @@ async function main() {
   console.log(`📂 Extraction → ${DEST_DIR}`);
   await config.extractFn(tmpFile, DEST_DIR, config.binary);
 
+  // MAINT-7: Post-extraction sanity check — verify binary exists and is non-zero.
+  // Guards against silent extraction failures (corrupt archive, partial download).
+  const extractedBin = path.join(DEST_DIR, config.binary);
+  if (!fs.existsSync(extractedBin)) {
+    console.error(`❌ Binaire introuvable après extraction : ${extractedBin}`);
+    process.exit(1);
+  }
+  const binStat = fs.statSync(extractedBin);
+  if (binStat.size === 0) {
+    console.error(`❌ Binaire extrait vide (0 octets) : ${extractedBin}`);
+    process.exit(1);
+  }
+  console.log(`   Binaire vérifié : ${binStat.size.toLocaleString()} octets`);
+
   // Write version file
   fs.writeFileSync(path.join(DEST_DIR, 'VERSION'), version, 'utf8');
 
@@ -235,11 +249,31 @@ async function downloadFile(url, dest) {
   process.stdout.write('\n');
 }
 
+// SEC-4: Host allowlist — redirect chains must stay on trusted domains.
+// Same rationale as openscadUpdater.js ALLOWED_DOWNLOAD_HOSTS.
+const ALLOWED_DOWNLOAD_HOSTS = new Set([
+  'github.com',
+  'objects.githubusercontent.com',
+  'releases.openscad.org',
+  'openscad.s3.amazonaws.com',
+  'github-releases.githubusercontent.com',
+]);
+
+function assertAllowedDownloadHost(url) {
+  let hostname;
+  try { hostname = new URL(url).hostname; }
+  catch { throw new Error(`URL de redirection invalide : ${url}`); }
+  if (!ALLOWED_DOWNLOAD_HOSTS.has(hostname)) {
+    throw new Error(`Hôte de redirection non autorisé : ${hostname}`);
+  }
+}
+
 // Follow HTTPS-only redirects, return the response stream of the final URL
 function followHttpsRedirects(url, redirectCount = 0, MAX_REDIRECTS = 5) {
   if (!url || !String(url).startsWith('https://')) {
     return Promise.reject(new Error(`Redirection non-HTTPS refusée : ${url}`));
   }
+  try { assertAllowedDownloadHost(url); } catch (e) { return Promise.reject(e); }
   return new Promise((resolve, reject) => {
     https
       .get(url, { headers: { 'User-Agent': USER_AGENT } }, (res) => {

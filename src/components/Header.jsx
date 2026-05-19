@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 
+// MAINT-6: 60-second cooldown — prevents spam-clicking from hammering GitHub API.
+const UPDATE_COOLDOWN_MS = 60_000;
+
 export default function Header() {
   const [checking, setChecking] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
   const statusTimerRef = useRef(null);
+  const lastCheckRef = useRef(0);
 
   // Clear pending timer on unmount to avoid state update on unmounted component
   useEffect(() => {
@@ -12,6 +16,9 @@ export default function Header() {
 
   const handleCheckUpdate = async () => {
     if (!window.nameforge || checking) return;
+    const now = Date.now();
+    if (now - lastCheckRef.current < UPDATE_COOLDOWN_MS) return;
+    lastCheckRef.current = now;
     setChecking(true);
     setUpdateStatus(null);
 

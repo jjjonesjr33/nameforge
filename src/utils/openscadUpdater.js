@@ -26,8 +26,27 @@ function assertHttpsUrl(url) {
 
 const MAX_API_BYTES = 1 * 1024 * 1024; // 1MB cap — GitHub API responses are typically < 50KB
 
+// SEC-1: API requests also restricted to trusted hosts — same allowlist as downloads.
+// Prevents a MITM/poisoned DNS from redirecting the GitHub API call to an attacker host.
+const ALLOWED_API_HOSTS = new Set([
+  'api.github.com',
+  'github.com',
+]);
+
+function assertAllowedApiHost(url) {
+  let hostname;
+  try { hostname = new URL(url).hostname; }
+  catch { throw new Error(`URL de redirection invalide : ${url}`); }
+  // Allow download hosts too — GitHub API may redirect to CDN for binary downloads
+  const allAllowed = new Set([...ALLOWED_API_HOSTS, ...ALLOWED_DOWNLOAD_HOSTS]);
+  if (!allAllowed.has(hostname)) {
+    throw new Error(`Hôte de redirection API non autorisé : ${hostname}`);
+  }
+}
+
 function httpsGet(url, redirectCount = 0) {
   assertHttpsUrl(url);
+  assertAllowedApiHost(url);
   return new Promise((resolve, reject) => {
     https.get(url, { headers: { 'User-Agent': USER_AGENT } }, (res) => {
       if ([301, 302, 307, 308].includes(res.statusCode)) {
@@ -90,8 +109,10 @@ async function checkForOpenSCADUpdate(app) {
   // hasUpdate = false when not installed OR version unreadable.
   // 'unknown' = binary exists but --version returned no parseable string →
   // treat as "can't compare" to avoid false positive update prompt.
+  // MAINT-5: use `>` not `!==` — prevents spurious downgrade prompt if GitHub
+  // returns an older tag (e.g. pre-release accidentally tagged as latest).
   const isInstalled = currentVersion !== null && currentVersion !== 'unknown';
-  const hasUpdate = isInstalled && latestVersion !== currentNorm;
+  const hasUpdate = isInstalled && latestVersion > currentNorm;
 
   // Find asset for current platform
   const assetUrl = pickAssetForPlatform(Array.isArray(release.assets) ? release.assets : []);
@@ -166,8 +187,14 @@ async function downloadFile(url, dest, onProgress) {
     }
   });
 
-  // stream.pipeline handles backpressure and closes the WriteStream properly
-  await pipelineAsync(res, fs.createWriteStream(dest));
+  // COR-3: Clean up partial file on pipeline failure (network abort, size limit, etc.)
+  try {
+    // stream.pipeline handles backpressure and closes the WriteStream properly
+    await pipelineAsync(res, fs.createWriteStream(dest));
+  } catch (err) {
+    try { fs.unlinkSync(dest); } catch { /* ignore — file may not exist yet */ }
+    throw err;
+  }
 }
 
 // MEDIUM-4: Host allowlist — redirect chains must stay on trusted domains.
