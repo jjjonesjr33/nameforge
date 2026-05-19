@@ -6,6 +6,9 @@ directories:
   buildResources: assets
   output: release
 
+# ASAR-1: Apply Electron fuses after packing (hardens executable)
+afterPack: scripts/afterPack.js
+
 files:
   - dist/**/*
   - main.js
@@ -58,7 +61,8 @@ linux:
 
 nsis:
   oneClick: false
-  allowToChangeInstallationDirectory: true
+  allowToChangeInstallationDirectory: false  # DLL-1: force Program Files — not user-writable
+  perMachine: true                           # installs to C:\Program Files, requires admin
   installerIcon: assets/icon.ico
   uninstallerIcon: assets/icon.ico
   createDesktopShortcut: true

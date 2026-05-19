@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, Component } from 'react';
+import { useState, useCallback, useEffect, Component } from 'react';
 import Header from './components/Header.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import Preview3D from './components/Preview3D.jsx';
@@ -40,8 +40,8 @@ export default function App() {
   const [bambuLoading, setBambuLoading] = useState(false);
   // null | 'stl' | '3mf' — which download button shows spinner
   const [downloadingFormat, setDownloadingFormat] = useState(null);
-  // Unique ID per generation — prevents concurrent calls from sharing temp file names
-  const genIdRef = useRef(0);
+  // RACE-1: crypto-random suffix — unguessable, eliminates temp file prediction/race attacks
+  const genSuffix = () => crypto.randomUUID().replace(/-/g, '').slice(0, 16);
 
   const updateParam = useCallback((key, value) => {
     setParams((prev) => ({ ...prev, [key]: value }));
@@ -63,7 +63,7 @@ export default function App() {
     setStatusMsg('Génération en cours…');
 
     const scadBase = buildScadParams(params);
-    const genId = ++genIdRef.current;
+    const genId = genSuffix();
     try {
       // nome_preview_z = altezza_base - profondita_incisione
       // → nom affleure le dessus du J (visuellement incrusté)
@@ -95,7 +95,7 @@ export default function App() {
 
     // nome_preview_z = 0 → géométrie correcte pour impression
     const exportParams = { ...buildScadParams(params), nome_preview_z: 0 };
-    const genId = ++genIdRef.current;
+    const genId = genSuffix();
 
     const result = await window.nameforge.generateModel(exportParams, format, `export_${genId}`);
 
@@ -149,7 +149,7 @@ export default function App() {
 
     // nome_preview_z = 0 → géométrie correcte pour impression
     const exportParams = { ...buildScadParams(params), nome_preview_z: 0 };
-    const genId = ++genIdRef.current;
+    const genId = genSuffix();
 
     try {
       const { baseResult, nomeResult } = await generateBothStl(exportParams, {

@@ -119,6 +119,8 @@ function paramsToCLIArgs(params) {
 //   2. Adds our custom Google Fonts directory
 // Passed via FONTCONFIG_FILE env var, which fontconfig reads at startup.
 // Cached per-process: fonts don't change at runtime, no need to re-write each call.
+// MISC-5: session-unique filename — prevents other processes predicting/overwriting the file.
+const _fontconfigSessionId = require('crypto').randomBytes(8).toString('hex');
 let _fontconfigCache = null;
 
 async function buildFontconfigFile(app) {
@@ -146,7 +148,7 @@ async function buildFontconfigFile(app) {
     '</fontconfig>',
   ].join('\n');
 
-  const confPath = path.join(os.tmpdir(), 'nameforge_fonts.conf');
+  const confPath = path.join(os.tmpdir(), `nameforge_fonts_${_fontconfigSessionId}.conf`);
   await fs.promises.writeFile(confPath, xml, 'utf8');
   _fontconfigCache = confPath;
   return confPath;
@@ -228,8 +230,12 @@ async function generateModel(app, scadFile, params, format = 'stl', suffix = 'ou
       if (code === 0) {
         safeResolve({ success: true, outputPath });
       } else {
-        const detail = (stderr || stdout).slice(0, 500);
-        safeReject(new Error(`OpenSCAD a échoué (code ${code}) :\n${detail}`));
+        // LOG-1: strip ANSI escape sequences and \r before embedding in error message
+        const raw = (stderr || stdout).slice(0, 500);
+        const detail = raw
+          .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '') // strip ANSI codes
+          .replace(/\r/g, '');                     // normalize line endings
+        safeReject(new Error(`OpenSCAD a échoué (code ${code}) : ${detail}`));
       }
     });
   });

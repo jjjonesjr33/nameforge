@@ -99,11 +99,14 @@ async function extractZipWindows(zipFile, destDir) {
   fs.mkdirSync(tmpExtract, { recursive: true });
 
   console.log('   Extraction ZIP via PowerShell…');
-  // Use execFileSync with args array to avoid shell injection
+  // MISC-3: pass paths via env vars — no quoting/injection risk regardless of path content
   execFileSync('powershell', [
     '-NoProfile', '-NonInteractive', '-Command',
-    `Expand-Archive -LiteralPath '${zipFile.replace(/'/g, "''")}' -DestinationPath '${tmpExtract.replace(/'/g, "''")}' -Force`,
-  ], { stdio: 'inherit' });
+    'Expand-Archive -LiteralPath $env:NF_ZIP -DestinationPath $env:NF_DEST -Force',
+  ], {
+    stdio: 'inherit',
+    env: { ...process.env, NF_ZIP: zipFile, NF_DEST: tmpExtract },
+  });
 
   try {
     // Find the openscad.exe inside extracted dir (may be in a subdirectory)
