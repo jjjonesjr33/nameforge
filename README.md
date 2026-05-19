@@ -10,6 +10,10 @@ Generate personalized letter + name engravings, export STL/3MF, and open directl
 
 ---
 
+![NameForge Screenshot](assets/screenshot.png)
+
+---
+
 ## Features
 
 - **Parametric generation** — large initial letter + engraved name, fully customizable
