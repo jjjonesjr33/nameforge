@@ -87,8 +87,10 @@ async function checkForOpenSCADUpdate(app) {
     throw new Error('Impossible de lire la version depuis GitHub API');
   }
 
-  // hasUpdate = false when not installed — no point prompting update for missing binary
-  const isInstalled = currentVersion !== null;
+  // hasUpdate = false when not installed OR version unreadable.
+  // 'unknown' = binary exists but --version returned no parseable string →
+  // treat as "can't compare" to avoid false positive update prompt.
+  const isInstalled = currentVersion !== null && currentVersion !== 'unknown';
   const hasUpdate = isInstalled && latestVersion !== currentNorm;
 
   // Find asset for current platform

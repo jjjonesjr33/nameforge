@@ -131,9 +131,9 @@ async function buildFontconfigFile(app) {
 
   if (!fs.existsSync(ourFontsPath)) return null;
 
-  // Convert Windows backslashes → forward slashes, then escape XML entities.
-  // XML-1: paths may contain & < > (e.g. username "Tom&Jerry") — must be escaped
-  // or the generated fontconfig XML will be malformed / injectable.
+  // XML-1: Escape XML entities then validate path stays within expected roots.
+  // Defence-in-depth: paths are internal (resourcesPath/tmpdir) but could contain
+  // special chars if username/profile path has & < > etc.
   const escapeXml = (s) => s
     .replace(/&/g, '&amp;')   // must be first
     .replace(/</g, '&lt;')
@@ -141,6 +141,23 @@ async function buildFontconfigFile(app) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
   const toFC = (p) => escapeXml(p.replace(/\\/g, '/'));
+
+  // Validate paths are within expected roots — prevents construction XML with
+  // unexpected dirs even if internal helpers somehow return a bad path.
+  const trustedRoots = [
+    path.resolve(getOpenSCADDir(app)),
+    path.resolve(getFontsPath(app)),
+    path.resolve(os.tmpdir()),
+  ];
+  const assertTrusted = (p) => {
+    const abs = path.resolve(p);
+    if (!trustedRoots.some((r) => abs.startsWith(r))) {
+      throw new Error(`Chemin fontconfig non autorisé : ${abs}`);
+    }
+  };
+  assertTrusted(ourFontsPath);
+  assertTrusted(os.tmpdir());
+  if (fs.existsSync(bundledConf)) assertTrusted(bundledConf);
 
   const includeBlock = fs.existsSync(bundledConf)
     ? `  <include>${toFC(bundledConf)}</include>\n`
