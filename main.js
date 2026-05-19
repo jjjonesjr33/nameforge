@@ -64,9 +64,18 @@ function createWindow() {
     if (!allowed) event.preventDefault();
   });
 
-  // MISC-2: deny all new-window requests — open https links in system browser instead
+  // SEC-2: deny all new-window requests — allow only trusted domains in system browser.
+  // Allowlist prevents a compromised renderer from navigating the user to phishing sites.
+  const ALLOWED_EXTERNAL_HOSTS = new Set([
+    'github.com', 'openscad.org', 'makerworld.com',
+  ]);
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://')) shell.openExternal(url);
+    try {
+      const { protocol, hostname } = new URL(url);
+      if (protocol === 'https:' && ALLOWED_EXTERNAL_HOSTS.has(hostname)) {
+        shell.openExternal(url);
+      }
+    } catch { /* malformed URL — deny */ }
     return { action: 'deny' };
   });
 
@@ -211,11 +220,27 @@ ipcMain.handle('check-openscad-update', async () => {
   }
 });
 
+// Hosts allowed as download sources at the IPC boundary
+const ALLOWED_DOWNLOAD_HOSTS_IPC = new Set([
+  'github.com', 'objects.githubusercontent.com',
+  'releases.openscad.org', 'openscad.s3.amazonaws.com',
+  'github-releases.githubusercontent.com',
+]);
+
 // Download updated OpenSCAD binary
 ipcMain.handle('download-openscad-update', async (event, downloadUrl) => {
-  // Validate URL at IPC boundary — reject non-HTTPS before passing to internal functions
+  // SEC-5: Validate URL at IPC boundary — reject non-HTTPS and untrusted hosts
+  // before passing to internal functions. Defence-in-depth against renderer compromise.
   if (!downloadUrl || !String(downloadUrl).startsWith('https://')) {
     return { success: false, error: `URL invalide ou non-HTTPS : ${downloadUrl}` };
+  }
+  try {
+    const { hostname } = new URL(String(downloadUrl));
+    if (!ALLOWED_DOWNLOAD_HOSTS_IPC.has(hostname)) {
+      return { success: false, error: `Hôte non autorisé : ${hostname}` };
+    }
+  } catch {
+    return { success: false, error: `URL malformée : ${downloadUrl}` };
   }
   try {
     const onProgress = (percent) => {

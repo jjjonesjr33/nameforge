@@ -105,6 +105,9 @@ function paramsToCLIArgs(params) {
       // OpenSCAD 2021 : utiliser 1/0 — plus fiable que true/false via -D
       args.push('-D', `${key}=${value ? 1 : 0}`);
     } else {
+      // SEC-3: Drop non-finite numbers (Infinity, NaN) — OpenSCAD rejects them and
+      // they could produce unexpected CLI output if stringified as "Infinity"/"NaN".
+      if (!Number.isFinite(value)) continue;
       args.push('-D', `${key}=${value}`);
     }
   }
@@ -144,14 +147,16 @@ async function buildFontconfigFile(app) {
 
   // Validate paths are within expected roots — prevents construction XML with
   // unexpected dirs even if internal helpers somehow return a bad path.
+  // SEC-7: append path.sep to each root — prevents "/tmp/foo" matching "/tmp/foobar".
   const trustedRoots = [
-    path.resolve(getOpenSCADDir(app)),
-    path.resolve(getFontsPath(app)),
-    path.resolve(os.tmpdir()),
+    path.resolve(getOpenSCADDir(app)) + path.sep,
+    path.resolve(getFontsPath(app))   + path.sep,
+    path.resolve(os.tmpdir())         + path.sep,
   ];
   const assertTrusted = (p) => {
     const abs = path.resolve(p);
-    if (!trustedRoots.some((r) => abs.startsWith(r))) {
+    // Allow exact match (path IS the root) or prefix match with separator
+    if (!trustedRoots.some((r) => abs === r.slice(0, -1) || abs.startsWith(r))) {
       throw new Error(`Chemin fontconfig non autorisé : ${abs}`);
     }
   };
@@ -200,7 +205,8 @@ async function generateModel(app, scadFile, params, format = 'stl', suffix = 'ou
 
   return new Promise((resolve, reject) => {
     let stderr = '';
-    let stdout = '';
+    // PERF-3: stdout drained without buffering (proc.stdout.resume() below).
+    // stderr captures all OpenSCAD diagnostic output; stdout is rarely populated.
 
     // settled flag — prevents double resolution if both 'error' and 'close' fire
     let settled = false;
@@ -238,9 +244,9 @@ async function generateModel(app, scadFile, params, format = 'stl', suffix = 'ou
       safeReject(new Error('OpenSCAD timeout (120 s) — génération annulée'));
     }, 120_000);
 
-    proc.stdout.on('data', (d) => {
-      if (stdout.length < MAX_OUTPUT_BYTES) stdout += d.toString();
-    });
+    // PERF-3: stdout drained but not stored — OpenSCAD writes nothing useful there for export.
+    // Must attach a listener to prevent the stream from pausing and blocking the process.
+    proc.stdout.resume();
     proc.stderr.on('data', (d) => {
       if (stderr.length < MAX_OUTPUT_BYTES) stderr += d.toString();
     });
@@ -256,7 +262,7 @@ async function generateModel(app, scadFile, params, format = 'stl', suffix = 'ou
         safeResolve({ success: true, outputPath });
       } else {
         // LOG-1: strip ANSI escape sequences and \r before embedding in error message
-        const raw = (stderr || stdout).slice(0, 500);
+        const raw = stderr.slice(0, 500);
         const detail = raw
           .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '') // strip ANSI codes
           .replace(/\r/g, '');                     // normalize line endings

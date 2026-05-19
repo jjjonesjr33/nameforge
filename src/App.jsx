@@ -40,8 +40,6 @@ export default function App() {
   const [bambuLoading, setBambuLoading] = useState(false);
   // null | 'stl' | '3mf' — which download button shows spinner
   const [downloadingFormat, setDownloadingFormat] = useState(null);
-  // RACE-1: crypto-random suffix — unguessable, eliminates temp file prediction/race attacks
-  const genSuffix = () => crypto.randomUUID().replace(/-/g, '').slice(0, 16);
 
   const updateParam = useCallback((key, value) => {
     setParams((prev) => ({ ...prev, [key]: value }));
@@ -94,6 +92,11 @@ export default function App() {
   // ── Téléchargement (export impression) ──────────────────────────────────────
   const handleDownload = useCallback(async (format) => {
     if (!window.nameforge) return;
+    // VALID-1: same guard as handleGenerate — download also calls OpenSCAD
+    if (!params.nome || !params.nome.trim()) {
+      setStatusMsg('Erreur : le champ Prénom / Texte est vide');
+      return;
+    }
     setLoading(true);
     setDownloadingFormat(format);
     setStatusMsg(`Génération ${format.toUpperCase()} pour export…`);
@@ -218,6 +221,10 @@ export default function App() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// PERF-2: module-scope — single allocation, not re-created on each render
+// RACE-1: crypto-random suffix — unguessable, eliminates temp file prediction/race attacks
+const genSuffix = () => crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+
 /**
  * Generate base + nome STL in parallel.
  * genId makes output file names unique — prevents concurrent calls from
@@ -226,6 +233,11 @@ export default function App() {
  * Throws on any failure with the error message from OpenSCAD.
  */
 async function generateBothStl(scadParams, { genId = 'x', baseOverrides = {}, nomeOverrides = {} } = {}) {
+  // COR-2: Guard — both parts invisible → nothing to generate, caller likely has a bug
+  if (!scadParams.mostra_base && !scadParams.mostra_nome) {
+    throw new Error('Rien à générer : Base et Nom sont tous les deux désactivés');
+  }
+
   const jobs = [];
 
   if (scadParams.mostra_base) {

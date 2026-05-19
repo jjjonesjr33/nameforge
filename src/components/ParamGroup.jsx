@@ -32,10 +32,15 @@ export default function ParamGroup({ title, defaultOpen = false, children }) {
 
 // ─── Atoms ────────────────────────────────────────────────────────────────────
 
-export function Field({ label, children, hint }) {
+// MAINT-9: Accept optional htmlFor so callers can wire label→input for accessibility.
+// Existing callers without htmlFor continue to work unchanged.
+export function Field({ label, children, hint, htmlFor }) {
   return (
     <div className="space-y-1">
-      <label className="block text-[12px] font-bold text-stone uppercase tracking-wide">
+      <label
+        htmlFor={htmlFor}
+        className="block text-[12px] font-bold text-stone uppercase tracking-wide"
+      >
         {label}
       </label>
       {children}

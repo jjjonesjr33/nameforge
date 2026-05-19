@@ -38,6 +38,9 @@ win:
     - target: nsis
       arch:
         - x64
+    # MAINT-2: Portable target runs without install — DLL-1 (perMachine/Program Files)
+    # protection does NOT apply. Acceptable for developer/tester convenience builds only.
+    # For public release, consider removing portable to enforce the NSIS DLL protection.
     - target: portable
       arch:
         - x64

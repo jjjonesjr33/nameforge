@@ -56,7 +56,8 @@ function patchBambu3mf(filePath, settings) {
   const xml = lines.join('\n');
 
   // ── Atomic write: write to tmp file then rename (prevents corruption) ────────
-  const tmpPath = filePath + '.tmp';
+  // SEC-6: unique suffix prevents collision if two concurrent patch calls race on same file.
+  const tmpPath = `${filePath}.${Date.now()}.${process.hrtime.bigint()}.tmp`;
   try {
     const zip = new AdmZip(filePath);
 
