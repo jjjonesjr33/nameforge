@@ -8,6 +8,8 @@ Generate personalized letter + name engravings, export STL/3MF, and open directl
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Electron](https://img.shields.io/badge/Electron-42-47848F)
 
+![NameForge Banner](assets/banner.png)
+
 ---
 
 ![NameForge Screenshot](assets/screenshot.png)
