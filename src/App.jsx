@@ -59,6 +59,11 @@ export default function App() {
   // ── Génération preview (2 STL séparés) ──────────────────────────────────────
   const handleGenerate = useCallback(async () => {
     if (!window.nameforge) return;
+    // VALID-1: Guard empty nome — OpenSCAD text() with "" throws a SCAD error
+    if (!params.nome || !params.nome.trim()) {
+      setStatusMsg('Erreur : le champ Prénom / Texte est vide');
+      return;
+    }
     setLoading(true);
     setStatusMsg('Génération en cours…');
 
@@ -144,6 +149,11 @@ export default function App() {
   // ── Ouvrir dans BambuStudio ─────────────────────────────────────────────────
   const handleOpenInBambu = useCallback(async () => {
     if (!window.nameforge) return;
+    // VALID-1: same guard as handleGenerate — Bambu also calls OpenSCAD
+    if (!params.nome || !params.nome.trim()) {
+      setStatusMsg('Erreur : le champ Prénom / Texte est vide');
+      return;
+    }
     setBambuLoading(true);
     setStatusMsg('Génération STL pour BambuStudio…');
 

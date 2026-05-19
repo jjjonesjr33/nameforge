@@ -243,7 +243,7 @@ function followHttpsRedirects(url, redirectCount = 0, MAX_REDIRECTS = 5) {
   return new Promise((resolve, reject) => {
     https
       .get(url, { headers: { 'User-Agent': USER_AGENT } }, (res) => {
-        if (res.statusCode === 301 || res.statusCode === 302) {
+        if ([301, 302, 307, 308].includes(res.statusCode)) {
           res.resume(); // drain to release socket
           if (redirectCount >= MAX_REDIRECTS) {
             return reject(new Error(`Trop de redirections (max ${MAX_REDIRECTS})`));

@@ -55,8 +55,12 @@ export function NumberInput({ value, onChange, min, max, step = 1 }) {
   const commit = () => {
     const v = parseFloat(draft);
     if (Number.isFinite(v)) {
-      onChange(v);
-      setDraft(String(v));
+      // Enforce min/max at commit time — HTML input attr alone doesn't clamp on manual entry
+      const clamped = min !== undefined && v < min ? min
+                    : max !== undefined && v > max ? max
+                    : v;
+      onChange(clamped);
+      setDraft(String(clamped));
     } else {
       // Revert to last valid value
       setDraft(String(value));
