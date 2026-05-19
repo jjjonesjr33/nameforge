@@ -277,10 +277,13 @@ ipcMain.handle('open-in-bambu', async (event, baseStlPath, nomeStlPath) => {
   let bambuExe;
   try { bambuExe = fs.realpathSync(bambuExeRaw); }
   catch { bambuExe = path.resolve(bambuExeRaw); }
+  // SEC-8: guard empty LOCALAPPDATA — empty string + path.sep = '\' alone,
+  // which would match any UNC path (\\server\share\...) via startsWith.
+  const localAppData = process.env.LOCALAPPDATA ?? '';
   const trustedRoots = [
     'C:\\Program Files\\', 'C:\\Program Files (x86)\\',
-    (process.env.LOCALAPPDATA ?? '').replace(/[/\\]$/, '') + path.sep,
-  ].filter(Boolean);
+    ...(localAppData ? [localAppData.replace(/[/\\]$/, '') + path.sep] : []),
+  ];
   const normBambu = bambuExe.toLowerCase();
   if (!trustedRoots.some((r) => normBambu.startsWith(r.toLowerCase()))) {
     return { success: false, error: 'Chemin BambuStudio suspect — accès refusé.' };

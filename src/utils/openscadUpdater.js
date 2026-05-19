@@ -26,8 +26,19 @@ function assertHttpsUrl(url) {
 
 const MAX_API_BYTES = 1 * 1024 * 1024; // 1MB cap — GitHub API responses are typically < 50KB
 
-// SEC-1: API requests also restricted to trusted hosts — same allowlist as downloads.
-// Prevents a MITM/poisoned DNS from redirecting the GitHub API call to an attacker host.
+// MEDIUM-4 / SEC-1: Host allowlists — defined early so all validation functions can reference them.
+// MAINT-10: Moved before assertAllowedApiHost to avoid referencing const before definition.
+
+// Download hosts — redirect chains for binary downloads must stay on these domains.
+const ALLOWED_DOWNLOAD_HOSTS = new Set([
+  'github.com',
+  'objects.githubusercontent.com',
+  'releases.openscad.org',
+  'openscad.s3.amazonaws.com',
+  'github-releases.githubusercontent.com',
+]);
+
+// API hosts — GitHub API calls (and their redirects) restricted to these domains.
 const ALLOWED_API_HOSTS = new Set([
   'api.github.com',
   'github.com',
@@ -197,15 +208,7 @@ async function downloadFile(url, dest, onProgress) {
   }
 }
 
-// MEDIUM-4: Host allowlist — redirect chains must stay on trusted domains.
-// Prevents a compromised CDN from redirecting to an attacker-controlled host.
-const ALLOWED_DOWNLOAD_HOSTS = new Set([
-  'github.com',
-  'objects.githubusercontent.com',
-  'releases.openscad.org',
-  'openscad.s3.amazonaws.com',
-  'github-releases.githubusercontent.com',
-]);
+// ALLOWED_DOWNLOAD_HOSTS defined at top of file (MAINT-10).
 
 function assertAllowedHost(url) {
   let hostname;

@@ -28,9 +28,23 @@ contextBridge.exposeInMainWorld('nameforge', {
     ipcRenderer.invoke('check-openscad-update'),
 
   downloadOpenSCADUpdate: (downloadUrl) => {
-    // Second-layer URL guard (main process also validates — defence in depth)
+    // MAINT-13: Second-layer guards — main process also validates (defence in depth).
+    // Check HTTPS + hostname allowlist so a compromised renderer can't reach arbitrary hosts.
+    const ALLOWED_DOWNLOAD_HOSTS = new Set([
+      'github.com', 'objects.githubusercontent.com',
+      'releases.openscad.org', 'openscad.s3.amazonaws.com',
+      'github-releases.githubusercontent.com',
+    ]);
     if (!downloadUrl || !String(downloadUrl).startsWith('https://')) {
       return Promise.reject(new Error('[preload] download URL must be HTTPS'));
+    }
+    try {
+      const { hostname } = new URL(String(downloadUrl));
+      if (!ALLOWED_DOWNLOAD_HOSTS.has(hostname)) {
+        return Promise.reject(new Error(`[preload] hôte non autorisé : ${hostname}`));
+      }
+    } catch {
+      return Promise.reject(new Error('[preload] URL malformée'));
     }
     return ipcRenderer.invoke('download-openscad-update', downloadUrl);
   },
