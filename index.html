@@ -1,15 +1,23 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- CSP géré au niveau Electron main process (session.webRequest) plutôt que meta tag
-         car les meta CSP bloquent les modules inline de React Fast Refresh en dev -->
+
+    <!-- CSP handled at the Electron main process level (session.webRequest)
+         instead of a meta tag because meta CSP blocks React Fast Refresh
+         inline modules during development -->
+
     <!-- <meta http-equiv="Content-Security-Policy" ... /> -->
-    <!-- CSP-1: Google Fonts removed — blocked by strict CSP in prod (style-src 'self').
-         Inter replaced by system UI font stack in index.css. -->
+
+    <!-- CSP-1: Google Fonts removed — blocked by strict CSP in production
+         (style-src 'self').
+
+         Inter replaced with the system UI font stack in index.css. -->
+
     <title>NameForge</title>
   </head>
+
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
