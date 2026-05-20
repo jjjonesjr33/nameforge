@@ -1,343 +1,433 @@
-import { useState, useCallback, useEffect, Component } from 'react';
-import Header from './components/Header.jsx';
-import Sidebar from './components/Sidebar.jsx';
-import Preview3D from './components/Preview3D.jsx';
+import { useMemo } from 'react';
+import ParamGroup, {
+  Field,
+  NumberInput,
+  TextInput,
+  Toggle,
+  ColorInput,
+  SelectInput,
+} from './ParamGroup.jsx';
 
-const DEFAULT_PARAMS = {
-  nome: 'Jason',
-  font_base: 'Bebas Neue:style=Regular',
-  font_corsivo: 'Pacifico:style=Regular',
-  iniziale_maiuscola: true,
-  mostra_base: true,
-  mostra_nome: true,
-  altezza_base: 20,
-  profondita_incisione: 4,
-  dimensione_lettera: 150,
-  dimensione_nome: 18,
-  altezza_nome_solido: 7,
-  offset_nome_x: 0,
-  offset_nome_y: 0,
-  tolleranza: 0.1,
-  margine_taglio: 10,
-  taglio_base: 10,
-  colore_base: '#E994F6',
-  colore_nome: '#FFFFFF',
-  layer_height: 0.2,
-  // ── Finitions d'impression ───────────────────────────────────────────────
-  fuzzy_skin: false,
-  fuzzy_skin_thickness: 0.3,
-  fuzzy_skin_point_distance: 0.8,
-  ironing_top: false,
-  chanfrein_haut: false,
-  chanfrein_taille: 1.5,
+// ── Font quality metadata ─────────────────────────────────────────────────────
+// rating: 'safe' | 'warn' | 'danger'
+// safe   = bold strokes, prints well at any size ≥ 6mm
+// warn   = medium strokes, fine above 12mm
+// danger = thin strokes / serifs, needs large size (20mm+)
+
+// ── Bundled Google Fonts (resources/fonts/) ───────────────────────────────────
+// All fonts verified present as TTF in resources/fonts/.
+// Variable fonts ([wght]) use style=Regular — safe across all OpenSCAD versions.
+// Montserrat[wght] and Nunito[wght] excluded: base instance is Thin/ExtraLight → too fine for print.
+const FONT_BASE_OPTIONS = [
+  { value: 'Bebas Neue:style=Regular',   label: 'Bebas Neue',      rating: 'safe',   hint: 'Condensed all-caps, wide strokes — perfect for engraving' },
+  { value: 'Anton:style=Regular',        label: 'Anton',            rating: 'safe',   hint: 'Impact-like, ultra bold — excellent readability' },
+  { value: 'Black Ops One:style=Regular', label: 'Black Ops One',  rating: 'safe',   hint: 'Military stencil, very thick — prints great' },
+  { value: 'Archivo Black:style=Regular', label: 'Archivo Black',  rating: 'safe',   hint: 'Ultra-bold geometric font — heavy strokes' },
+  { value: 'Russo One:style=Regular',    label: 'Russo One',        rating: 'safe',   hint: 'Industrial / military, bold sans-serif' },
+  { value: 'Orbitron:style=Regular',     label: 'Orbitron',         rating: 'safe',   hint: 'Sci-fi / tech, great for gaming nameplates' },
+  { value: 'Bungee:style=Regular',       label: 'Bungee',           rating: 'safe',   hint: 'Chunky display font, made for signs — top print choice' },
+  { value: 'Oswald:style=Regular',       label: 'Oswald',           rating: 'safe',   hint: 'Condensed sans-serif, naturally dense and readable' },
+  { value: 'Righteous:style=Regular',    label: 'Righteous',        rating: 'safe',   hint: 'Retro sport style, thick rounded strokes' },
+  { value: 'STIX Two Math:style=Regular', label: 'STIX Two Math',   rating: 'danger', hint: 'Serif math font, thin strokes — large size required (≥20mm)' },
+];
+
+const FONT_CORSIVO_OPTIONS = [
+  { value: 'Pacifico:style=Regular',         label: 'Pacifico',         rating: 'safe',   hint: 'Thick cursive, great for printing' },
+  { value: 'Lobster:style=Regular',          label: 'Lobster',           rating: 'safe',   hint: 'Stylized script with well-defined strokes' },
+  { value: 'Kaushan Script:style=Regular',   label: 'Kaushan Script',    rating: 'safe',   hint: 'Bold cursive, excellent 3D readability' },
+  { value: 'Permanent Marker:style=Regular', label: 'Permanent Marker',  rating: 'safe',   hint: 'Thick marker style, organic and dynamic' },
+  { value: 'Comfortaa:style=Regular',        label: 'Comfortaa',         rating: 'safe',   hint: 'Rounded geometric font, modern and readable' },
+  { value: 'Dancing Script:style=Regular',   label: 'Dancing Script',    rating: 'warn',   hint: 'Elegant cursive — use ≥ 12mm when possible' },
+];
+
+const RATING_BADGE = {
+  safe:   { icon: '✅', color: 'text-green-400',  bg: 'bg-green-400/10', label: 'Print-safe' },
+  warn:   { icon: '⚠️', color: 'text-yellow-400', bg: 'bg-yellow-400/10', label: 'OK at large size (>12mm)' },
+  danger: { icon: '❌', color: 'text-red-400',    bg: 'bg-red-400/10',   label: 'Thin strokes — increase size' },
 };
 
-export default function App() {
-  const [params, setParams] = useState(DEFAULT_PARAMS);
-  const [previewData, setPreviewData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [statusMsg, setStatusMsg] = useState('Prêt');
-  const [bambuLoading, setBambuLoading] = useState(false);
-  // null | 'stl' | '3mf' — which download button shows spinner
-  const [downloadingFormat, setDownloadingFormat] = useState(null);
-
-  const updateParam = useCallback((key, value) => {
-    setParams((prev) => ({ ...prev, [key]: value }));
-  }, []);
-
-  // ── Écoute des événements de progression OpenSCAD (main process → renderer) ──
-  useEffect(() => {
-    if (!window.nameforge) return;
-    const unsub = window.nameforge.onGenerationProgress((data) => {
-      if (data.status === 'running') setStatusMsg(data.message);
-    });
-    return unsub;
-  }, []);
-
-  // ── Génération preview (2 STL séparés) ──────────────────────────────────────
-  const handleGenerate = useCallback(async () => {
-    if (!window.nameforge) return;
-    // VALID-1: Guard empty nome — OpenSCAD text() with "" throws a SCAD error
-    if (!params.nome || !params.nome.trim()) {
-      setStatusMsg('Erreur : le champ Prénom / Texte est vide');
-      return;
-    }
-    setLoading(true);
-    setStatusMsg('Génération en cours…');
-
-    const scadBase = buildScadParams(params);
-    const genId = genSuffix();
-    try {
-      // nome_preview_z = altezza_base - profondita_incisione
-      // → nom affleure le dessus du J (visuellement incrusté)
-      const { baseResult, nomeResult } = await generateBothStl(scadBase, {
-        genId,
-        baseOverrides: { incidi_preview: 1 },
-        nomeOverrides: { nome_preview_z: scadBase.altezza_base - scadBase.profondita_incisione },
-      });
-      setPreviewData({
-        baseStlPath: baseResult?.outputPath ?? null,
-        nomeStlPath: nomeResult?.outputPath ?? null,
-        baseColor: params.colore_base,
-        nomeColor: params.colore_nome,
-      });
-      setStatusMsg('STL généré avec succès');
-    } catch (err) {
-      setStatusMsg(`Erreur : ${err.message}`);
-    }
-
-    setLoading(false);
-  }, [params]);
-
-  // ── Téléchargement (export impression) ──────────────────────────────────────
-  const handleDownload = useCallback(async (format) => {
-    if (!window.nameforge) return;
-    // VALID-1: same guard as handleGenerate — download also calls OpenSCAD
-    if (!params.nome || !params.nome.trim()) {
-      setStatusMsg('Erreur : le champ Prénom / Texte est vide');
-      return;
-    }
-    setLoading(true);
-    setDownloadingFormat(format);
-    setStatusMsg(`Génération ${format.toUpperCase()} pour export…`);
-
-    // nome_preview_z = 0 → géométrie correcte pour impression
-    const exportParams = { ...buildScadParams(params), nome_preview_z: 0 };
-    const genId = genSuffix();
-
-    const result = await window.nameforge.generateModel(exportParams, format, `export_${genId}`);
-
-    if (!result.success) {
-      setLoading(false);
-      setDownloadingFormat(null);
-      setStatusMsg(`Erreur : ${result.error}`);
-      return;
-    }
-
-    // ── Inject BambuStudio settings into 3MF (optional, best-effort) ─────────
-    if (format === '3mf' && (params.fuzzy_skin || params.ironing_top)) {
-      try {
-        await window.nameforge.patch3mf(result.outputPath, {
-          fuzzy_skin: params.fuzzy_skin,
-          fuzzy_skin_thickness: params.fuzzy_skin_thickness,
-          fuzzy_skin_point_distance: params.fuzzy_skin_point_distance,
-          ironing_top: params.ironing_top,
-        });
-        setStatusMsg('3MF prêt — réglages BambuStudio embarqués');
-      } catch {
-        // Non-fatal — géométrie valide, réglages non intégrés
-        setStatusMsg('3MF généré (patch BambuStudio ignoré)');
-      }
-    }
-
-    try {
-      const saveResult = await window.nameforge.saveModel(result.outputPath, format);
-      if (saveResult.success) {
-        // Show only filename — avoid leaking full filesystem path in UI
-        const fileName = saveResult.filePath.split(/[\\/]/).pop();
-        setStatusMsg(`Fichier enregistré : ${fileName}`);
-      } else if (!saveResult.canceled) {
-        setStatusMsg(`Erreur sauvegarde : ${saveResult.error}`);
-      } else {
-        setStatusMsg('Prêt');
-      }
-    } catch (err) {
-      setStatusMsg(`Erreur sauvegarde : ${err.message}`);
-    } finally {
-      setLoading(false);
-      setDownloadingFormat(null);
-    }
-  }, [params]);
-
-  // ── Ouvrir dans BambuStudio ─────────────────────────────────────────────────
-  const handleOpenInBambu = useCallback(async () => {
-    if (!window.nameforge) return;
-    // VALID-1: same guard as handleGenerate — Bambu also calls OpenSCAD
-    if (!params.nome || !params.nome.trim()) {
-      setStatusMsg('Erreur : le champ Prénom / Texte est vide');
-      return;
-    }
-    setBambuLoading(true);
-    setStatusMsg('Génération STL pour BambuStudio…');
-
-    // nome_preview_z = 0 → géométrie correcte pour impression
-    const exportParams = { ...buildScadParams(params), nome_preview_z: 0 };
-    const genId = genSuffix();
-
-    try {
-      const { baseResult, nomeResult } = await generateBothStl(exportParams, {
-        genId,
-        baseOverrides: { incidi_preview: 1 },
-      });
-      const openResult = await window.nameforge.openInBambu(
-        baseResult?.outputPath ?? null,
-        nomeResult?.outputPath ?? null
-      );
-      if (openResult.success) {
-        setStatusMsg('BambuStudio ouvert avec les modèles');
-      } else {
-        setStatusMsg(`BambuStudio : ${openResult.error}`);
-      }
-    } catch (err) {
-      setStatusMsg(`Erreur : ${err.message}`);
-    }
-
-    setBambuLoading(false);
-  }, [params]);
-
+function FontBadge({ options, value }) {
+  const found = options.find((o) => o.value === value);
+  if (!found) return null;
+  const b = RATING_BADGE[found.rating];
   return (
-    <div className="flex flex-col h-full bg-app-bg text-on-dark select-none">
-      <Header />
-
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar
-          params={params}
-          onUpdateParam={updateParam}
-          onGenerate={handleGenerate}
-          onDownload={handleDownload}
-          onOpenInBambu={handleOpenInBambu}
-          loading={loading}
-          bambuLoading={bambuLoading}
-          downloadingFormat={downloadingFormat}
-        />
-
-        <main className="flex-1 relative overflow-hidden">
-          <Preview3DErrorBoundary onError={setStatusMsg} previewData={previewData}>
-            <Preview3D
-              previewData={previewData}
-              loading={loading}
-              onError={setStatusMsg}
-            />
-          </Preview3DErrorBoundary>
-
-          <div className="absolute bottom-0 left-0 right-0 px-4 py-1.5 bg-black/60 border-t border-app-border">
-            <span className="section-label">{statusMsg}</span>
-          </div>
-        </main>
-      </div>
+    <div className={`mt-1 flex items-start gap-1.5 rounded px-2 py-1 ${b.bg}`}>
+      <span className="text-[11px] leading-[1.4]">{b.icon}</span>
+      <span className={`text-[11px] leading-[1.4] ${b.color}`}>
+        {b.label}
+        {found.hint && <span className="text-white/40"> — {found.hint}</span>}
+      </span>
     </div>
   );
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// Combined font list — module-level constant, avoids spreading on every render
+const ALL_FONT_OPTIONS = [...FONT_BASE_OPTIONS, ...FONT_CORSIVO_OPTIONS];
 
-// PERF-2: module-scope — single allocation, not re-created on each render
-// RACE-1: crypto-random suffix — unguessable, eliminates temp file prediction/race attacks
-const genSuffix = () => crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+// ── Text size warning logic ───────────────────────────────────────────────────
+function getSizeWarning(dimensione_nome, layer_height, fontValue) {
+  const font = ALL_FONT_OPTIONS.find((o) => o.value === fontValue);
+  const rating = font?.rating ?? 'safe';
 
-/**
- * Generate base + nome STL in parallel.
- * genId makes output file names unique — prevents concurrent calls from
- * corrupting each other's temp files.
- * baseOverrides / nomeOverrides are merged onto scadParams for each part.
- * Throws on any failure with the error message from OpenSCAD.
- */
-async function generateBothStl(scadParams, { genId = 'x', baseOverrides = {}, nomeOverrides = {} } = {}) {
-  // COR-2: Guard — both parts invisible → nothing to generate, caller likely has a bug
-  if (!scadParams.mostra_base && !scadParams.mostra_nome) {
-    throw new Error('Rien à générer : Base et Nom sont tous les deux désactivés');
+  const minSafe   = layer_height * 40; // e.g. 0.2 × 40 = 8mm
+  const minDanger = layer_height * 20; // e.g. 0.2 × 20 = 4mm
+  // thin-serif fonts need more space
+  const minThinFont = layer_height * 60; // e.g. 0.2 × 60 = 12mm
+
+  if (dimensione_nome < minDanger) {
+    return {
+      level: 'danger',
+      msg: `⚠️ ${dimensione_nome}mm — too small (recommended minimum: ${minDanger.toFixed(1)}mm at ${layer_height}mm layer height)`,
+    };
   }
-
-  const jobs = [];
-
-  if (scadParams.mostra_base) {
-    jobs.push(
-      window.nameforge
-        .generateModel({ ...scadParams, mostra_base: true, mostra_nome: false, ...baseOverrides }, 'stl', `base_${genId}`)
-        .then((r) => ({ type: 'base', ...r }))
-    );
+  if (rating === 'danger' && dimensione_nome < minThinFont) {
+    return {
+      level: 'warn',
+      msg: `⚠️ ${dimensione_nome}mm with a thin serif font — risk of strokes under 0.4mm. Try ≥ ${minThinFont.toFixed(0)}mm or choose another font.`,
+    };
   }
-  if (scadParams.mostra_nome) {
-    jobs.push(
-      window.nameforge
-        .generateModel({ ...scadParams, mostra_base: false, mostra_nome: true, ...nomeOverrides }, 'stl', `nome_${genId}`)
-        .then((r) => ({ type: 'nome', ...r }))
-    );
+  if (dimensione_nome < minSafe) {
+    return {
+      level: 'warn',
+      msg: `⚠️ ${dimensione_nome}mm — small size at ${layer_height}mm layer height. Check the preview.`,
+    };
   }
-
-  // allSettled — both promises run to completion regardless of failure
-  // so no orphaned OpenSCAD process is left running
-  const settled = await Promise.allSettled(jobs);
-  const failed = settled.find((s) => s.status === 'rejected' || !s.value?.success);
-  if (failed) {
-    const err = failed.status === 'rejected'
-      ? failed.reason?.message
-      : failed.value?.error;
-    throw new Error(err ?? 'Erreur OpenSCAD');
-  }
-
-  const results = settled.map((s) => s.value);
-  return {
-    baseResult: results.find((r) => r.type === 'base') ?? null,
-    nomeResult: results.find((r) => r.type === 'nome') ?? null,
-  };
+  return null;
 }
 
-// ─── Error Boundary for Preview3D ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 
-class Preview3DErrorBoundary extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(err) {
-    if (this.props.onError) this.props.onError(`Erreur aperçu 3D : ${err.message}`);
-  }
-  // Auto-reset when a new model is generated — user gets a fresh render attempt
-  componentDidUpdate(prevProps) {
-    if (this.state.hasError && prevProps.previewData !== this.props.previewData) {
-      this.setState({ hasError: false });
-    }
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="w-full h-full flex items-center justify-center bg-app-bg">
-          <p className="text-stone text-[13px]">Aperçu 3D indisponible. Réessayez après génération.</p>
+export default function Sidebar({ params, onUpdateParam, onGenerate, onDownload, onOpenInBambu, loading, bambuLoading, downloadingFormat }) {
+  const p = params;
+  const u = onUpdateParam;
+
+  const sizeWarn = useMemo(
+    () => getSizeWarning(p.dimensione_nome, p.layer_height, p.font_corsivo),
+    [p.dimensione_nome, p.layer_height, p.font_corsivo]
+  );
+
+  return (
+    <aside className="w-80 shrink-0 flex flex-col border-r border-app-border bg-app-panel">
+      {/* Header sidebar */}
+      <div className="px-4 py-3 border-b border-app-border">
+        <span className="section-label">Model settings</span>
+      </div>
+
+      {/* Scrollable param area */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+
+        {/* ── Text ────────────────────────────────────────── */}
+        <ParamGroup title="Text" defaultOpen={true}>
+          <Field label="Name / Text">
+            <TextInput
+              value={p.nome}
+              onChange={(v) => u('nome', v)}
+              placeholder="Jason"
+            />
+          </Field>
+
+          <Field label="Font — base letter">
+            <SelectInput
+              value={p.font_base}
+              onChange={(v) => u('font_base', v)}
+              options={FONT_BASE_OPTIONS}
+            />
+            <FontBadge options={FONT_BASE_OPTIONS} value={p.font_base} />
+          </Field>
+
+          <Field label="Font — cursive name">
+            <SelectInput
+              value={p.font_corsivo}
+              onChange={(v) => u('font_corsivo', v)}
+              options={FONT_CORSIVO_OPTIONS}
+            />
+            <FontBadge options={FONT_CORSIVO_OPTIONS} value={p.font_corsivo} />
+          </Field>
+
+          <Toggle
+            value={p.iniziale_maiuscola}
+            onChange={(v) => u('iniziale_maiuscola', v)}
+            label="Capitalize first letter"
+          />
+          <Toggle
+            value={p.mostra_base}
+            onChange={(v) => u('mostra_base', v)}
+            label="Show base letter"
+          />
+          <Toggle
+            value={p.mostra_nome}
+            onChange={(v) => u('mostra_nome', v)}
+            label="Show name"
+          />
+        </ParamGroup>
+
+        {/* ── Dimensions ───────────────────────────────────── */}
+        <ParamGroup title="Dimensions (mm)">
+          <Field label="Layer height" hint="Affects minimum size warnings">
+            <NumberInput
+              value={p.layer_height}
+              onChange={(v) => u('layer_height', v)}
+              min={0.05} max={0.6} step={0.05}
+            />
+          </Field>
+
+          <Field label="Base height" hint="Thickness of the large letter">
+            <NumberInput
+              value={p.altezza_base}
+              onChange={(v) => u('altezza_base', v)}
+              min={5} max={100} step={1}
+            />
+          </Field>
+
+          <Field label="Engraving depth">
+            <NumberInput
+              value={p.profondita_incisione}
+              onChange={(v) => u('profondita_incisione', v)}
+              min={0.5} max={20} step={0.5}
+            />
+          </Field>
+
+          <Field label="Base letter size">
+            <NumberInput
+              value={p.dimensione_lettera}
+              onChange={(v) => u('dimensione_lettera', v)}
+              min={20} max={500} step={5}
+            />
+          </Field>
+
+          <Field label="Name size" hint="Reduce if the name extends past the base letter">
+            <NumberInput
+              value={p.dimensione_nome}
+              onChange={(v) => u('dimensione_nome', v)}
+              min={5} max={200} step={1}
+            />
+            {/* Text size + layer height warning */}
+            {sizeWarn && (
+              <div className={`mt-1 rounded px-2 py-1 text-[11px] leading-[1.4] ${
+                sizeWarn.level === 'danger'
+                  ? 'bg-red-400/10 text-red-300'
+                  : 'bg-yellow-400/10 text-yellow-300'
+              }`}>
+                {sizeWarn.msg}
+              </div>
+            )}
+          </Field>
+
+          <Field label="Raised name thickness" hint="If name is solid">
+            <NumberInput
+              value={p.altezza_nome_solido}
+              onChange={(v) => u('altezza_nome_solido', v)}
+              min={0.5} max={30} step={0.5}
+            />
+          </Field>
+
+          <Field label="Name horizontal offset (X)">
+            <NumberInput
+              value={p.offset_nome_x}
+              onChange={(v) => u('offset_nome_x', v)}
+              min={-200} max={200} step={1}
+            />
+          </Field>
+
+          <Field label="Name vertical offset (Y)">
+            <NumberInput
+              value={p.offset_nome_y}
+              onChange={(v) => u('offset_nome_y', v)}
+              min={-200} max={200} step={1}
+            />
+          </Field>
+
+          <Field label="Engraving tolerance">
+            <NumberInput
+              value={p.tolleranza}
+              onChange={(v) => u('tolleranza', v)}
+              min={0} max={2} step={0.05}
+            />
+          </Field>
+
+          <Field label="Bottom cut margin">
+            <NumberInput
+              value={p.margine_taglio}
+              onChange={(v) => u('margine_taglio', v)}
+              min={0} max={50} step={1}
+            />
+          </Field>
+
+          <Field label="Bottom cut" hint="0 = curve intact · 30 = high flat cut">
+            <NumberInput
+              value={p.taglio_base}
+              onChange={(v) => u('taglio_base', v)}
+              min={0} max={60} step={1}
+            />
+          </Field>
+        </ParamGroup>
+
+        {/* ── Print finishes ───────────────────────── */}
+        <ParamGroup title="Print finishes">
+
+          {/* ── Fuzzy Skin ── */}
+          <Toggle
+            value={p.fuzzy_skin}
+            onChange={(v) => u('fuzzy_skin', v)}
+            label="Fuzzy Skin / rough texture"
+          />
+          {p.fuzzy_skin && (
+            <>
+              <Field label="Fuzzy thickness" hint="mm — texture amplitude">
+                <NumberInput
+                  value={p.fuzzy_skin_thickness}
+                  onChange={(v) => u('fuzzy_skin_thickness', v)}
+                  min={0.1} max={3} step={0.1}
+                />
+              </Field>
+              <Field label="Point distance" hint="mm — texture density">
+                <NumberInput
+                  value={p.fuzzy_skin_point_distance}
+                  onChange={(v) => u('fuzzy_skin_point_distance', v)}
+                  min={0.2} max={5} step={0.1}
+                />
+              </Field>
+            </>
+          )}
+
+          {/* ── Ironing ── */}
+          <Toggle
+            value={p.ironing_top}
+            onChange={(v) => u('ironing_top', v)}
+            label="Iron top surface"
+          />
+
+          {/* Info banner — slicer settings embedded in 3MF */}
+          {(p.fuzzy_skin || p.ironing_top) && (
+            <div className="rounded px-2 py-1.5 text-[11px] leading-[1.4] bg-[#1e3a5f]/60 border border-blue-500/30 text-blue-300">
+              ℹ️ Slicer settings are embedded in the <strong>3MF</strong> export for BambuStudio.
+              They are not visible in the 3D preview.
+            </div>
+          )}
+
+          {/* ── Geometry chamfer ── */}
+          <div className="border-t border-app-border pt-3">
+            <Toggle
+              value={p.chanfrein_haut}
+              onChange={(v) => u('chanfrein_haut', v)}
+              label="Top edge chamfer"
+            />
+            {p.chanfrein_haut && (
+              <Field label="Chamfer size" hint="mm — 45° bevel at the top of the letter">
+                <NumberInput
+                  value={p.chanfrein_taille}
+                  onChange={(v) => u('chanfrein_taille', v)}
+                  min={0.2} max={10} step={0.2}
+                />
+              </Field>
+            )}
+          </div>
+
+        </ParamGroup>
+
+        {/* ── Colors ─────────────────────────────────────── */}
+        <ParamGroup title="Print colors">
+          <Field label="Base color" hint="Filament 1 / large letter">
+            <ColorInput
+              value={p.colore_base}
+              onChange={(v) => u('colore_base', v)}
+            />
+          </Field>
+
+          <Field label="Name color" hint="Filament 2 / text">
+            <ColorInput
+              value={p.colore_nome}
+              onChange={(v) => u('colore_nome', v)}
+            />
+          </Field>
+        </ParamGroup>
+      </div>
+
+      {/* ── Actions ──────────────────────────────────────────── */}
+      <div className="p-3 border-t border-app-border space-y-2 shrink-0">
+        <button
+          className="btn-primary w-full"
+          onClick={onGenerate}
+          disabled={loading || bambuLoading}
+        >
+          {loading ? (
+            <>
+              <Spinner />
+              Generating…
+            </>
+          ) : (
+            <>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="square" d="M12 4v16m8-8H4" />
+              </svg>
+              Generate
+            </>
+          )}
+        </button>
+
+        <div className="flex gap-2">
+          <button
+            className="btn-outline flex-1 text-[13px] h-9 px-3 flex items-center justify-center gap-1.5"
+            onClick={() => onDownload('stl')}
+            disabled={loading || bambuLoading}
+          >
+            {downloadingFormat === 'stl' ? <><Spinner />STL…</> : 'STL'}
+          </button>
+          <button
+            className="btn-outline flex-1 text-[13px] h-9 px-3 flex items-center justify-center gap-1.5"
+            onClick={() => onDownload('3mf')}
+            disabled={loading || bambuLoading}
+          >
+            {downloadingFormat === '3mf' ? <><Spinner />3MF…</> : '3MF'}
+          </button>
         </div>
-      );
-    }
-    return this.props.children;
-  }
+
+        {/* BambuStudio 1-click export */}
+        <button
+          className="w-full h-9 px-3 rounded text-[13px] font-medium flex items-center justify-center gap-2
+                     bg-[#00ae42]/15 border border-[#00ae42]/40 text-[#00ae42]
+                     hover:bg-[#00ae42]/25 hover:border-[#00ae42]/70
+                     disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          onClick={onOpenInBambu}
+          disabled={loading || bambuLoading}
+        >
+          {bambuLoading ? (
+            <>
+              <Spinner />
+              Opening…
+            </>
+          ) : (
+            <>
+              {/* Bambu-ish icon */}
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              Open in BambuStudio
+            </>
+          )}
+        </button>
+      </div>
+    </aside>
+  );
 }
 
-function buildScadParams(params) {
-  const out = { ...params };
-
-  if (out.iniziale_maiuscola && out.nome) {
-    out.nome = out.nome.charAt(0).toUpperCase() + out.nome.slice(1);
-  }
-
-  // Couleurs hex → vecteur OpenSCAD [r,g,b]
-  out.colore_base = hexToVec(params.colore_base);
-  out.colore_nome = hexToVec(params.colore_nome);
-
-  // Booléens → 1/0 pour OpenSCAD 2021
-  out.mostra_base = params.mostra_base ? 1 : 0;
-  out.mostra_nome = params.mostra_nome ? 1 : 0;
-  out.iniziale_maiuscola = params.iniziale_maiuscola ? 1 : 0;
-
-  // Chanfrein : convertir bool + taille → mm pour OpenSCAD
-  out.chanfrein_haut_mm = params.chanfrein_haut ? params.chanfrein_taille : 0;
-
-  // Supprimer les params UI-only (slicer / non-OpenSCAD)
-  delete out.chanfrein_haut;
-  delete out.chanfrein_taille;
-  delete out.fuzzy_skin;
-  delete out.fuzzy_skin_thickness;
-  delete out.fuzzy_skin_point_distance;
-  delete out.ironing_top;
-
-  return out;
-}
-
-function hexToVec(hex) {
-  // Pad to 6 chars in case of partial hex during mid-edit (avoids NaN in OpenSCAD args)
-  const h = (hex || '#000000').replace('#', '').padEnd(6, '0');
-  const parse = (s) => {
-    const v = parseInt(s, 16);
-    return (Number.isNaN(v) ? 0 : v / 255).toFixed(3);
-  };
-  return `[${parse(h.slice(0, 2))},${parse(h.slice(2, 4))},${parse(h.slice(4, 6))}]`;
+function Spinner() {
+  return (
+    <svg
+      className="animate-spin w-4 h-4"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <circle
+        className="opacity-25"
+        cx="12" cy="12" r="10"
+        stroke="currentColor" strokeWidth="4"
+      />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+      />
+    </svg>
+  );
 }
