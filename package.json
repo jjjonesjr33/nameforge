@@ -2,7 +2,7 @@
   "name": "nameforge",
   "version": "1.0.1",
   "private": true,
-  "description": "Générateur de modèles 3D paramétriques pour MakerWorld",
+  "description": "Parametric 3D model generator for MakerWorld",
   "main": "main.js",
   "author": "NameForge",
   "license": "MIT",
