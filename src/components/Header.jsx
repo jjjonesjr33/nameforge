@@ -28,8 +28,8 @@ export default function Header() {
     if (result.success && result.updateInfo) {
       setUpdateStatus({ type: 'available', version: result.updateInfo.version });
     } else if (!result.success) {
-      // publish not configured or network error — show distinct message
-      setUpdateStatus({ type: 'error', msg: result.error ?? result.message ?? 'Vérification impossible' });
+      // Publish not configured or network error — show distinct message
+      setUpdateStatus({ type: 'error', msg: result.error ?? result.message ?? 'Unable to check for updates' });
     } else {
       setUpdateStatus({ type: 'latest' });
     }
@@ -40,9 +40,9 @@ export default function Header() {
 
   return (
     <header className="flex items-center justify-between px-6 h-12 bg-surface-dark border-b border-app-border shrink-0">
-      {/* Logo + nom */}
+      {/* Logo + name */}
       <div className="flex items-center gap-3">
-        {/* Corner-square décoration — signature NVIDIA design */}
+        {/* Corner-square decoration — NVIDIA design signature */}
         <div className="w-3 h-3 bg-primary shrink-0" />
         <span className="text-on-dark font-bold text-[18px] tracking-tight">
           Name<span className="text-primary">Forge</span>
@@ -52,7 +52,7 @@ export default function Header() {
         </span>
       </div>
 
-      {/* Droite */}
+      {/* Right side */}
       <div className="flex items-center gap-3">
         {updateStatus && (
           <span
@@ -62,10 +62,10 @@ export default function Header() {
             }`}
           >
             {updateStatus.type === 'available'
-              ? `v${updateStatus.version} disponible`
+              ? `v${updateStatus.version} available`
               : updateStatus.type === 'error'
-              ? 'Vérification impossible'
-              : 'Version à jour'}
+              ? 'Unable to check for updates'
+              : 'Up to date'}
           </span>
         )}
 
@@ -74,7 +74,7 @@ export default function Header() {
           onClick={handleCheckUpdate}
           disabled={checking}
         >
-          {checking ? 'Vérification…' : 'Mises à jour'}
+          {checking ? 'Checking…' : 'Updates'}
         </button>
       </div>
     </header>
